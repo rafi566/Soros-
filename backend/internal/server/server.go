@@ -122,6 +122,11 @@ func (s *APIService) handleJobs(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		if err := s.validateDestinations(req.SourceID, req.DestIDs); err != nil {
+			s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+
 		job := s.startJob(req.SourceID, req.DestIDs)
 		s.writeJSON(w, http.StatusAccepted, job)
 	default:
@@ -207,6 +212,36 @@ func (s *APIService) defaultDestinations(sourceID string) []string {
 
 	if len(s.destinations) > 0 {
 		return []string{s.destinations[0].ID}
+	}
+
+	return nil
+}
+
+func (s *APIService) validateDestinations(sourceID string, destIDs []string) error {
+	allowed := make(map[string]struct{})
+
+	for _, fanout := range s.fanouts {
+		if fanout.SourceID == sourceID {
+			for _, id := range fanout.DestinationIDs {
+				allowed[id] = struct{}{}
+			}
+		}
+	}
+
+	for _, conn := range s.connections {
+		if conn.SourceID == sourceID {
+			allowed[conn.DestinationID] = struct{}{}
+		}
+	}
+
+	if len(allowed) == 0 {
+		return fmt.Errorf("no destinations configured for source %s", sourceID)
+	}
+
+	for _, id := range destIDs {
+		if _, ok := allowed[id]; !ok {
+			return fmt.Errorf("destination %s is not configured for source %s", id, sourceID)
+		}
 	}
 
 	return nil
