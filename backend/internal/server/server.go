@@ -218,6 +218,11 @@ func (s *APIService) defaultDestinations(sourceID string) []string {
 }
 
 func (s *APIService) validateDestinations(sourceID string, destIDs []string) error {
+	existing := make(map[string]struct{}, len(s.destinations))
+	for _, dest := range s.destinations {
+		existing[dest.ID] = struct{}{}
+	}
+
 	allowed := make(map[string]struct{})
 
 	for _, fanout := range s.fanouts {
@@ -239,6 +244,10 @@ func (s *APIService) validateDestinations(sourceID string, destIDs []string) err
 	}
 
 	for _, id := range destIDs {
+		if _, ok := existing[id]; !ok {
+			return fmt.Errorf("destination %s does not exist", id)
+		}
+
 		if _, ok := allowed[id]; !ok {
 			return fmt.Errorf("destination %s is not configured for source %s", id, sourceID)
 		}
